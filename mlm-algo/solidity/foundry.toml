@@ -1,0 +1,11 @@
+[profile.default]
+  auto_detect_solc = true
+  libs = ["lib"]
+  out = "out"
+  src = "src"
+
+[fmt]
+  line_length = 120
+  tab_width = 4
+
+  # See more config options https://github.com/foundry-rs/foundry/tree/master/config

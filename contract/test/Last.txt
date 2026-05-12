@@ -1,0 +1,257 @@
+const {
+  time,
+  loadFixture,
+} = require("@nomicfoundation/hardhat-network-helpers");
+const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
+const { expect } = require("chai");
+const { ethers } = require("hardhat");
+
+describe("GeniosClub G3X7 new registration", function () {
+  let geniosClub;
+  let token;
+  let pool;
+  let accounts;
+  let user1;
+  let referrer;
+
+  before(async function () {
+    this.timeout(100000000);
+
+    accounts = await ethers.getSigners();
+    referrer = accounts[0];
+    user1 = accounts[1];
+
+    const Token = await ethers.getContractFactory("MyToken");
+    token = await Token.deploy();
+    await token.deployed();
+
+    const Pool = await ethers.getContractFactory("Pool");
+    pool = await Pool.deploy(token.address);
+    await pool.deployed();
+
+    const GeniosClub = await ethers.getContractFactory("GeniosClub");
+    geniosClub = await GeniosClub.deploy(
+      referrer.address,
+      token.address,
+      pool.address,
+      referrer.address
+    );
+    await geniosClub.deployed();
+  });
+
+  it("register a new user", async function () {
+    this.timeout(100000000);
+
+    const level = 1;
+
+    await token.transfer(accounts[1].address, "5000000000000000000");
+    await token
+      .connect(accounts[1])
+      .approve(geniosClub.address, "5000000000000000000");
+
+    await geniosClub.connect(accounts[1]).RegistrationExt(referrer.address);
+    const user = await geniosClub.Users(accounts[1].address);
+
+    console.log(String(user.Id), accounts[1].address);
+
+    expect(user.Id).to.equal(1);
+    expect(user.Ref).to.equal(referrer.address);
+    expect(
+      await geniosClub.usersActiveG3X3Levels(accounts[1].address, level)
+    ).to.equal(true);
+    expect(
+      await geniosClub.usersActiveG3X7Levels(accounts[1].address, level)
+    ).to.equal(true);
+  });
+
+  it("register 15 users with a user1", async function () {
+    this.timeout(100000000);
+
+    const level = 1;
+    const numUsers = 363;
+
+    for (let i = 2; i <= numUsers; i++) {
+      const user = accounts[i];
+
+      const levelPrice = "5000000000000000000";
+      await token.transfer(user.address, levelPrice);
+
+      await token.connect(user).approve(geniosClub.address, levelPrice);
+      await geniosClub.connect(user).RegistrationExt(accounts[1].address);
+
+      const userData = await geniosClub.Users(user.address);
+      expect(userData.Ref).to.equal(accounts[1].address);
+
+      console.log(
+        String(userData.Id),
+        await geniosClub.usersActiveG3X3Levels(accounts[1].address, 2),
+        await geniosClub.usersActiveG3X7Levels(accounts[1].address, 2),
+        String(
+          (await geniosClub.usersG3X7Matrix(accounts[1].address, 1))
+            .ReinvestCount
+        ),
+        String((await geniosClub.Users(accounts[1].address)).Amount),
+        String(await token.balanceOf(geniosClub.address))
+      );
+
+      expect(
+        await geniosClub.usersActiveG3X3Levels(user.address, level)
+      ).to.equal(true);
+      expect(
+        await geniosClub.usersActiveG3X7Levels(user.address, level)
+      ).to.equal(true);
+    }
+  });
+
+  it("usersG3X2Matrix", async function () {
+    console.log("-------------------------------------------------------");
+    const usersG3X2Matrix = await geniosClub.usersG3X7Matrix(
+      accounts[1].address,
+      1
+    );
+    console.log(usersG3X2Matrix);
+    console.log(
+      "user1 : ",
+      String((await geniosClub.Users(accounts[1].address)).Id),
+      ", ref : ",
+      String((await geniosClub.Users(usersG3X2Matrix.CurrentRef)).Id)
+    );
+    console.log(
+      usersG3X2Matrix?.FirstLevelRefs[0] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[0])).Id),
+      usersG3X2Matrix?.FirstLevelRefs[1] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[1])).Id),
+      usersG3X2Matrix?.FirstLevelRefs[2] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[2])).Id)
+    );
+    console.log("-------------------------------------------------------");
+  });
+  it("usersG3X2Matrix", async function () {
+    const usersG3X2Matrix = await geniosClub.usersG3X7Matrix(
+      accounts[2].address,
+      1
+    );
+    console.log(
+      "user1 : ",
+      String((await geniosClub.Users(accounts[2].address)).Id),
+      ", ref : ",
+      String((await geniosClub.Users(usersG3X2Matrix.CurrentRef)).Id)
+    );
+    console.log(
+      usersG3X2Matrix?.FirstLevelRefs[0] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[0])).Id),
+      usersG3X2Matrix?.FirstLevelRefs[1] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[1])).Id),
+      usersG3X2Matrix?.FirstLevelRefs[2] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[2])).Id)
+    );
+    console.log("-------------------------------------------------------");
+  });
+  it("usersG3X2Matrix", async function () {
+    const usersG3X2Matrix = await geniosClub.usersG3X7Matrix(
+      accounts[3].address,
+      1
+    );
+    console.log(
+      "user1 : ",
+      String((await geniosClub.Users(accounts[3].address)).Id),
+      ", ref : ",
+      String((await geniosClub.Users(usersG3X2Matrix.CurrentRef)).Id)
+    );
+    console.log(
+      usersG3X2Matrix?.FirstLevelRefs[0] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[0])).Id),
+      usersG3X2Matrix?.FirstLevelRefs[1] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[1])).Id),
+      usersG3X2Matrix?.FirstLevelRefs[2] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[2])).Id)
+    );
+    console.log("-------------------------------------------------------");
+  });
+  it("usersG3X2Matrix", async function () {
+    const usersG3X2Matrix = await geniosClub.usersG3X7Matrix(
+      accounts[4].address,
+      1
+    );
+    console.log(
+      "user1 : ",
+      String((await geniosClub.Users(accounts[4].address)).Id),
+      ", ref : ",
+      String((await geniosClub.Users(usersG3X2Matrix.CurrentRef)).Id)
+    );
+    console.log(
+      usersG3X2Matrix?.FirstLevelRefs[0] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[0])).Id),
+      usersG3X2Matrix?.FirstLevelRefs[1] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[1])).Id),
+      usersG3X2Matrix?.FirstLevelRefs[2] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[2])).Id)
+    );
+    console.log("-------------------------------------------------------");
+  });
+  it("usersG3X2Matrix", async function () {
+    const usersG3X2Matrix = await geniosClub.usersG3X7Matrix(
+      accounts[5].address,
+      1
+    );
+    console.log(
+      "user1 : ",
+      String((await geniosClub.Users(accounts[5].address)).Id),
+      ", ref : ",
+      String((await geniosClub.Users(usersG3X2Matrix.CurrentRef)).Id),
+      ", length : ",
+      usersG3X2Matrix?.FirstLevelRefs?.length
+    );
+    console.log(
+      usersG3X2Matrix?.FirstLevelRefs[0] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[0])).Id),
+      usersG3X2Matrix?.FirstLevelRefs[1] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[1])).Id),
+      usersG3X2Matrix?.FirstLevelRefs[2] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[2])).Id)
+    );
+    console.log("-------------------------------------------------------");
+  });
+  it("usersG3X2Matrix", async function () {
+    const usersG3X2Matrix = await geniosClub.usersG3X7Matrix(
+      accounts[6].address,
+      1
+    );
+    console.log(
+      "user1 : ",
+      String((await geniosClub.Users(accounts[6].address)).Id),
+      ", ref : ",
+      String((await geniosClub.Users(usersG3X2Matrix.CurrentRef)).Id)
+    );
+    console.log(
+      usersG3X2Matrix?.FirstLevelRefs[0] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[0])).Id),
+      usersG3X2Matrix?.FirstLevelRefs[1] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[1])).Id),
+      usersG3X2Matrix?.FirstLevelRefs[2] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[2])).Id)
+    );
+    console.log("-------------------------------------------------------");
+  });
+  it("usersG3X2Matrix", async function () {
+    const usersG3X2Matrix = await geniosClub.usersG3X7Matrix(
+      accounts[7].address,
+      1
+    );
+    console.log(
+      "user1 : ",
+      String((await geniosClub.Users(accounts[7].address)).Id),
+      ", ref : ",
+      String((await geniosClub.Users(usersG3X2Matrix.CurrentRef)).Id)
+    );
+    console.log(
+      usersG3X2Matrix?.FirstLevelRefs[0] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[0])).Id),
+      usersG3X2Matrix?.FirstLevelRefs[1] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[1])).Id),
+      usersG3X2Matrix?.FirstLevelRefs[2] &&
+        String((await geniosClub.Users(usersG3X2Matrix?.FirstLevelRefs[2])).Id)
+    );
+    console.log("-------------------------------------------------------");
+  });
+});

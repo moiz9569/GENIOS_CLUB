@@ -1,0 +1,13 @@
+{
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^2.0.0",
+    "hardhat": "^2.14.0"
+  },
+  "dependencies": {
+    "@nomiclabs/hardhat-ethers": "^2.2.3",
+    "@openzeppelin/contracts": "^4.9.0",
+    "@uniswap/v3-periphery": "^1.4.3",
+    "hardhat-ethers": "^1.0.1",
+    "prettier-plugin-solidity": "^1.1.3"
+  }
+}

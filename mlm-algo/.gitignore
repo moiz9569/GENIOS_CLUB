@@ -1,0 +1,14 @@
+# directories
+build
+dist
+node_modules
+package-lock.json
+
+# files
+*.env
+*.log
+*.tsbuildinfo
+.DS_Store
+.pnp.*
+npm-debug.log*
+yarn.lock

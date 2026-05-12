@@ -1,0 +1,728 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.10;
+
+import "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
+import "./IGeniosClub.sol";
+import "./IPool.sol";
+
+contract GeniosClub_G3X7_Matrix is IGeniosClub {
+  address public Id1;
+  address public TOKEN;
+
+  struct User {
+    uint256 Id;
+    address Ref;
+    uint256 Amount;
+    uint256 PartnersCount;
+    uint256 TotalTeam;
+    uint256 DirectRefs;
+    mapping(uint8 => bool) ActiveG3X7Levels;
+    mapping(uint8 => G3X7) G3X7Matrix;
+  }
+
+  struct G3X7 {
+    address CurrentRef;
+    address[] FirstLevelRefs;
+    address[] SecondLevelRefs;
+    address[] ThirdLevelRefs;
+    address[] FourthLevelRefs;
+    address[] FifthLevelRefs;
+    address[] SixthLevelRefs;
+    address[] SeventhLevelRefs;
+    bool Blocked;
+    uint256 ReinvestCount;
+  }
+
+  uint256 public LastUserId = 2;
+  mapping(address => User) public Users;
+  mapping(uint256 => address) public IdToAddress;
+
+  uint8 public constant LAST_LEVEL = 8;
+  mapping(uint8 => uint256) public LevelPrice;
+
+  uint8 public ClubComm;
+  uint8 public RanksComm;
+  uint8 public AcademyComm;
+
+  address public PoolAddr;
+  address public ClubAddr;
+  address public AcademyAddr;
+
+  struct Rank_Requirement {
+    uint256 TotalTeam;
+    uint256 DirectRefs;
+    uint8 ActiveInMatrix;
+  }
+  mapping(uint8 => Rank_Requirement) public Rank;
+
+  constructor(
+    address id1,
+    address tokenAddr,
+    address poolAddr,
+    address clubAddr,
+    address academyAddr
+  ) {
+    Id1 = id1;
+    TOKEN = tokenAddr;
+    PoolAddr = poolAddr;
+    ClubAddr = clubAddr;
+    AcademyAddr = academyAddr;
+
+    ClubComm = 10;
+    RanksComm = 15;
+    AcademyComm = 25;
+
+    LevelPrice[1] = 2.5e18;
+    LevelPrice[2] = 10e18;
+    LevelPrice[3] = 40e18;
+    LevelPrice[4] = 160e18;
+    LevelPrice[5] = 640e18;
+    LevelPrice[6] = 2560e18;
+    LevelPrice[7] = 10240e18;
+    LevelPrice[8] = 40960e18;
+
+    Rank[1] = Rank_Requirement({
+      TotalTeam: 10,
+      DirectRefs: 3,
+      ActiveInMatrix: 1
+    });
+    Rank[2] = Rank_Requirement({
+      TotalTeam: 40,
+      DirectRefs: 3,
+      ActiveInMatrix: 1
+    });
+    Rank[3] = Rank_Requirement({
+      TotalTeam: 40,
+      DirectRefs: 3,
+      ActiveInMatrix: 1
+    });
+    Rank[4] = Rank_Requirement({
+      TotalTeam: 640,
+      DirectRefs: 3,
+      ActiveInMatrix: 1
+    });
+    Rank[5] = Rank_Requirement({
+      TotalTeam: 2560,
+      DirectRefs: 3,
+      ActiveInMatrix: 1
+    });
+    Rank[6] = Rank_Requirement({
+      TotalTeam: 10240,
+      DirectRefs: 3,
+      ActiveInMatrix: 1
+    });
+    Rank[7] = Rank_Requirement({
+      TotalTeam: 40960,
+      DirectRefs: 3,
+      ActiveInMatrix: 1
+    });
+    Rank[8] = Rank_Requirement({
+      TotalTeam: 163840,
+      DirectRefs: 3,
+      ActiveInMatrix: 0
+    });
+
+    Users[Id1].Id = 1;
+    Users[Id1].Ref = address(0);
+    Users[Id1].PartnersCount = uint256(0);
+
+    IdToAddress[1] = Id1;
+    for (uint8 i = 1; i <= LAST_LEVEL; i++) {
+      Users[Id1].ActiveG3X7Levels[i] = true;
+    }
+  }
+
+  function registrationExt(address refAddr) external {
+    TransferHelper.safeTransferFrom(
+      TOKEN,
+      msg.sender,
+      address(this),
+      LevelPrice[1]
+    );
+
+    _registration(msg.sender, refAddr);
+  }
+
+  function buyNewLevel(uint8 level) external {
+    TransferHelper.safeTransferFrom(
+      TOKEN,
+      msg.sender,
+      address(this),
+      LevelPrice[level]
+    );
+
+    _buyNewLevel(msg.sender, level);
+  }
+
+  function _registration(address userAddr, address refAddr) private {
+    require(!isUserExists(userAddr), "user exists");
+    require(isUserExists(refAddr), "referrer not exists");
+
+    Users[userAddr].Id = LastUserId;
+    Users[userAddr].Ref = refAddr;
+    Users[userAddr].PartnersCount = uint(0);
+
+    IdToAddress[LastUserId] = userAddr;
+    Users[userAddr].Ref = refAddr;
+    LastUserId++;
+
+    Users[refAddr].PartnersCount++;
+    Users[refAddr].DirectRefs++;
+
+    Users[userAddr].ActiveG3X7Levels[1] = true;
+
+    address freeG3X7Referrer = findFreeG3X7Referrer(userAddr, 1);
+    updateG3X7Referrer(userAddr, freeG3X7Referrer, 1);
+
+    emit Registration(userAddr, refAddr, Users[userAddr].Id, Users[refAddr].Id);
+  }
+
+  function _buyNewLevel(address userAddr, uint8 level) internal {
+    require(isUserExists(userAddr), "user is not exists. Register first.");
+
+    require(
+      !Users[userAddr].ActiveG3X7Levels[level],
+      "level already activated"
+    );
+
+    require(level > 1 && level <= LAST_LEVEL, "invalid level");
+    require(
+      Users[userAddr].ActiveG3X7Levels[level - 1],
+      "buy previous level first"
+    );
+
+    Users[userAddr].ActiveG3X7Levels[level] = true;
+    if (Users[userAddr].G3X7Matrix[level - 1].Blocked) {
+      Users[userAddr].G3X7Matrix[level - 1].Blocked = false;
+    }
+
+    address freeG3X7Referrer = findFreeG3X7Referrer(userAddr, level);
+    updateG3X7Referrer(userAddr, freeG3X7Referrer, level);
+    emit Upgrade(userAddr, freeG3X7Referrer, 2, level);
+  }
+
+  function UpdateG3X2MatrixRank(address refAddr, uint8 level) internal {
+    Users[refAddr].TotalTeam++;
+
+    if (
+      Users[refAddr].TotalTeam > Rank[level].TotalTeam &&
+      Users[refAddr].DirectRefs > Rank[level].DirectRefs &&
+      Users[refAddr].ActiveG3X7Levels[level + Rank[level].ActiveInMatrix]
+    ) {
+      IPool(PoolAddr).AddUser(level, refAddr);
+      Users[refAddr].DirectRefs = 0;
+      Users[refAddr].TotalTeam = 0;
+    }
+  }
+
+  function updateG3X7Referrer(
+    address userAddr,
+    address refAddr,
+    uint8 level
+  ) private {
+    require(
+      Users[refAddr].ActiveG3X7Levels[level],
+      "500. Referrer level is inactive"
+    );
+
+    UpdateG3X2MatrixRank(refAddr, level);
+
+    // Update the referrer's referrals based on the level
+    if (Users[refAddr].G3X7Matrix[level].FirstLevelRefs.length < 3) {
+      Users[refAddr].G3X7Matrix[level].FirstLevelRefs.push(userAddr);
+      Users[userAddr].G3X7Matrix[level].CurrentRef = refAddr;
+
+      emit NewUserPlace(
+        userAddr,
+        refAddr,
+        2,
+        level,
+        uint8(Users[refAddr].G3X7Matrix[level].FirstLevelRefs.length)
+      );
+
+      if (refAddr == Id1) {
+        return sendTokenDividends(refAddr, userAddr, 2, level);
+      }
+
+      address ref_currentRef = Users[refAddr].G3X7Matrix[level].CurrentRef;
+      Users[ref_currentRef].G3X7Matrix[level].SecondLevelRefs.push(userAddr);
+
+      emit NewUserPlace(
+        userAddr,
+        ref_currentRef,
+        2,
+        level,
+        uint8(Users[refAddr].G3X7Matrix[level].FirstLevelRefs.length)
+      );
+
+      return updateG3X7RefLastLevel(userAddr, ref_currentRef, level);
+    } else if (Users[refAddr].G3X7Matrix[level].SecondLevelRefs.length < 9) {
+      Users[refAddr].G3X7Matrix[level].SecondLevelRefs.push(userAddr);
+      Users[userAddr].G3X7Matrix[level].CurrentRef = refAddr;
+
+      emit NewUserPlace(
+        userAddr,
+        refAddr,
+        2,
+        level,
+        uint8(Users[refAddr].G3X7Matrix[level].SecondLevelRefs.length)
+      );
+
+      if (refAddr == Id1) {
+        return sendTokenDividends(refAddr, userAddr, 2, level);
+      }
+
+      address ref_currentRef = Users[refAddr].G3X7Matrix[level].CurrentRef;
+      Users[ref_currentRef].G3X7Matrix[level].ThirdLevelRefs.push(userAddr);
+
+      emit NewUserPlace(
+        userAddr,
+        ref_currentRef,
+        2,
+        level,
+        uint8(Users[refAddr].G3X7Matrix[level].SecondLevelRefs.length)
+      );
+
+      return updateG3X7RefLastLevel(userAddr, ref_currentRef, level);
+    } else if (Users[refAddr].G3X7Matrix[level].ThirdLevelRefs.length < 27) {
+      Users[refAddr].G3X7Matrix[level].ThirdLevelRefs.push(userAddr);
+      Users[userAddr].G3X7Matrix[level].CurrentRef = refAddr;
+
+      emit NewUserPlace(
+        userAddr,
+        refAddr,
+        2,
+        level,
+        uint8(Users[refAddr].G3X7Matrix[level].ThirdLevelRefs.length)
+      );
+
+      if (refAddr == Id1) {
+        return sendTokenDividends(refAddr, userAddr, 2, level);
+      }
+
+      address ref_currentRef = Users[refAddr].G3X7Matrix[level].CurrentRef;
+      Users[ref_currentRef].G3X7Matrix[level].FourthLevelRefs.push(userAddr);
+
+      emit NewUserPlace(
+        userAddr,
+        ref_currentRef,
+        2,
+        level,
+        uint8(Users[refAddr].G3X7Matrix[level].ThirdLevelRefs.length)
+      );
+
+      return updateG3X7RefLastLevel(userAddr, ref_currentRef, level);
+    } else if (Users[refAddr].G3X7Matrix[level].FourthLevelRefs.length < 81) {
+      Users[refAddr].G3X7Matrix[level].FourthLevelRefs.push(userAddr);
+      Users[userAddr].G3X7Matrix[level].CurrentRef = refAddr;
+
+      emit NewUserPlace(
+        userAddr,
+        refAddr,
+        2,
+        level,
+        uint8(Users[refAddr].G3X7Matrix[level].FourthLevelRefs.length)
+      );
+
+      if (refAddr == Id1) {
+        return sendTokenDividends(refAddr, userAddr, 2, level);
+      }
+
+      address ref_currentRef = Users[refAddr].G3X7Matrix[level].CurrentRef;
+      Users[ref_currentRef].G3X7Matrix[level].FifthLevelRefs.push(userAddr);
+
+      emit NewUserPlace(
+        userAddr,
+        ref_currentRef,
+        2,
+        level,
+        uint8(Users[refAddr].G3X7Matrix[level].FourthLevelRefs.length)
+      );
+
+      return updateG3X7RefLastLevel(userAddr, ref_currentRef, level);
+    } else if (Users[refAddr].G3X7Matrix[level].FifthLevelRefs.length < 243) {
+      Users[refAddr].G3X7Matrix[level].FifthLevelRefs.push(userAddr);
+      Users[userAddr].G3X7Matrix[level].CurrentRef = refAddr;
+
+      emit NewUserPlace(
+        userAddr,
+        refAddr,
+        2,
+        level,
+        uint8(Users[refAddr].G3X7Matrix[level].FifthLevelRefs.length)
+      );
+
+      if (refAddr == Id1) {
+        return sendTokenDividends(refAddr, userAddr, 2, level);
+      }
+
+      address ref_currentRef = Users[refAddr].G3X7Matrix[level].CurrentRef;
+      Users[ref_currentRef].G3X7Matrix[level].SixthLevelRefs.push(userAddr);
+
+      emit NewUserPlace(
+        userAddr,
+        ref_currentRef,
+        2,
+        level,
+        uint8(Users[refAddr].G3X7Matrix[level].FifthLevelRefs.length)
+      );
+
+      return updateG3X7RefLastLevel(userAddr, ref_currentRef, level);
+    } else if (Users[refAddr].G3X7Matrix[level].SixthLevelRefs.length < 729) {
+      Users[refAddr].G3X7Matrix[level].SixthLevelRefs.push(userAddr);
+      Users[userAddr].G3X7Matrix[level].CurrentRef = refAddr;
+
+      emit NewUserPlace(
+        userAddr,
+        refAddr,
+        2,
+        level,
+        uint8(Users[refAddr].G3X7Matrix[level].SixthLevelRefs.length)
+      );
+
+      if (refAddr == Id1) {
+        return sendTokenDividends(refAddr, userAddr, 2, level);
+      }
+
+      address ref_currentRef = Users[refAddr].G3X7Matrix[level].CurrentRef;
+      Users[ref_currentRef].G3X7Matrix[level].SeventhLevelRefs.push(userAddr);
+
+      emit NewUserPlace(
+        userAddr,
+        ref_currentRef,
+        2,
+        level,
+        uint8(Users[refAddr].G3X7Matrix[level].SixthLevelRefs.length)
+      );
+
+      return updateG3X7RefLastLevel(userAddr, ref_currentRef, level);
+    }
+
+    Users[refAddr].G3X7Matrix[level].SeventhLevelRefs.push(userAddr);
+
+    if (
+      (Users[Users[refAddr].G3X7Matrix[level].FirstLevelRefs[0]]
+        .G3X7Matrix[level]
+        .FirstLevelRefs
+        .length <=
+        Users[Users[refAddr].G3X7Matrix[level].FirstLevelRefs[1]]
+          .G3X7Matrix[level]
+          .FirstLevelRefs
+          .length) &&
+      (Users[Users[refAddr].G3X7Matrix[level].FirstLevelRefs[1]]
+        .G3X7Matrix[level]
+        .FirstLevelRefs
+        .length <=
+        Users[Users[refAddr].G3X7Matrix[level].FirstLevelRefs[2]]
+          .G3X7Matrix[level]
+          .FirstLevelRefs
+          .length)
+    ) {
+      updateG3X7(userAddr, refAddr, level, 0);
+    } else if (
+      Users[Users[refAddr].G3X7Matrix[level].FirstLevelRefs[1]]
+        .G3X7Matrix[level]
+        .FirstLevelRefs
+        .length <=
+      Users[Users[refAddr].G3X7Matrix[level].FirstLevelRefs[2]]
+        .G3X7Matrix[level]
+        .FirstLevelRefs
+        .length
+    ) {
+      updateG3X7(userAddr, refAddr, level, 1);
+    } else {
+      updateG3X7(userAddr, refAddr, level, 2);
+    }
+
+    updateG3X7RefLastLevel(userAddr, refAddr, level);
+  }
+
+  function updateG3X7(
+    address userAddr,
+    address refAddr,
+    uint8 level,
+    int x2
+  ) private {
+    if (x2 == 0) {
+      Users[Users[refAddr].G3X7Matrix[level].FirstLevelRefs[0]]
+        .G3X7Matrix[level]
+        .FirstLevelRefs
+        .push(userAddr);
+
+      emit NewUserPlace(
+        userAddr,
+        Users[refAddr].G3X7Matrix[level].FirstLevelRefs[0],
+        2,
+        level,
+        uint8(
+          Users[Users[refAddr].G3X7Matrix[level].FirstLevelRefs[0]]
+            .G3X7Matrix[level]
+            .FirstLevelRefs
+            .length
+        )
+      );
+
+      emit NewUserPlace(
+        userAddr,
+        refAddr,
+        2,
+        level,
+        3 +
+          uint8(
+            Users[Users[refAddr].G3X7Matrix[level].FirstLevelRefs[0]]
+              .G3X7Matrix[level]
+              .FirstLevelRefs
+              .length
+          )
+      );
+
+      //set current level
+      Users[userAddr].G3X7Matrix[level].CurrentRef = Users[refAddr]
+        .G3X7Matrix[level]
+        .FirstLevelRefs[0];
+    } else if (x2 == 1) {
+      Users[Users[refAddr].G3X7Matrix[level].FirstLevelRefs[1]]
+        .G3X7Matrix[level]
+        .FirstLevelRefs
+        .push(userAddr);
+
+      emit NewUserPlace(
+        userAddr,
+        Users[refAddr].G3X7Matrix[level].FirstLevelRefs[1],
+        2,
+        level,
+        uint8(
+          Users[Users[refAddr].G3X7Matrix[level].FirstLevelRefs[1]]
+            .G3X7Matrix[level]
+            .FirstLevelRefs
+            .length
+        )
+      );
+
+      emit NewUserPlace(
+        userAddr,
+        refAddr,
+        2,
+        level,
+        6 +
+          uint8(
+            Users[Users[refAddr].G3X7Matrix[level].FirstLevelRefs[1]]
+              .G3X7Matrix[level]
+              .FirstLevelRefs
+              .length
+          )
+      );
+
+      //set current level
+      Users[userAddr].G3X7Matrix[level].CurrentRef = Users[refAddr]
+        .G3X7Matrix[level]
+        .FirstLevelRefs[1];
+    } else {
+      Users[Users[refAddr].G3X7Matrix[level].FirstLevelRefs[2]]
+        .G3X7Matrix[level]
+        .FirstLevelRefs
+        .push(userAddr);
+
+      emit NewUserPlace(
+        userAddr,
+        Users[refAddr].G3X7Matrix[level].FirstLevelRefs[2],
+        2,
+        level,
+        uint8(
+          Users[Users[refAddr].G3X7Matrix[level].FirstLevelRefs[2]]
+            .G3X7Matrix[level]
+            .FirstLevelRefs
+            .length
+        )
+      );
+
+      emit NewUserPlace(
+        userAddr,
+        refAddr,
+        2,
+        level,
+        9 +
+          uint8(
+            Users[Users[refAddr].G3X7Matrix[level].FirstLevelRefs[2]]
+              .G3X7Matrix[level]
+              .FirstLevelRefs
+              .length
+          )
+      );
+
+      //set current level
+      Users[userAddr].G3X7Matrix[level].CurrentRef = Users[refAddr]
+        .G3X7Matrix[level]
+        .FirstLevelRefs[2];
+    }
+  }
+
+  function updateG3X7RefLastLevel(
+    address userAddr,
+    address refAddr,
+    uint8 level
+  ) private {
+    uint256 len = Users[refAddr].G3X7Matrix[level].SeventhLevelRefs.length;
+
+    if (len < 2187) {
+      if (
+        len >= 2183 &&
+        len <= 2186 &&
+        !Users[refAddr].ActiveG3X7Levels[level + 1]
+      ) {
+        // update needed
+        Users[refAddr].Amount += LevelPrice[level];
+        return;
+      }
+
+      return sendTokenDividends(refAddr, userAddr, 2, level);
+    }
+
+    // recycle
+    Users[refAddr].G3X7Matrix[level].FirstLevelRefs = new address[](0);
+    Users[refAddr].G3X7Matrix[level].SecondLevelRefs = new address[](0);
+
+    if (!Users[refAddr].ActiveG3X7Levels[level + 1] && level != LAST_LEVEL) {
+      if (Users[refAddr].Amount >= LevelPrice[level + 1]) {
+        _buyNewLevel(refAddr, level + 1);
+        Users[refAddr].Amount -= LevelPrice[level + 1];
+      } else {
+        Users[refAddr].G3X7Matrix[level].Blocked = true;
+      }
+    }
+
+    Users[refAddr].G3X7Matrix[level].ReinvestCount++;
+
+    if (refAddr != Id1) {
+      address freeRefAddr = findFreeG3X7Referrer(refAddr, level);
+      emit Reinvest(refAddr, freeRefAddr, userAddr, 2, level);
+
+      updateG3X7Referrer(refAddr, freeRefAddr, level);
+    } else {
+      emit Reinvest(Id1, address(0), userAddr, 2, level);
+      sendTokenDividends(Id1, userAddr, 2, level);
+    }
+  }
+
+  function findFreeG3X7Referrer(
+    address userAddr,
+    uint8 level
+  ) public view returns (address refAddr) {
+    while (true) {
+      if (Users[Users[userAddr].Ref].ActiveG3X7Levels[level]) {
+        return Users[userAddr].Ref;
+      }
+      userAddr = Users[userAddr].Ref;
+    }
+  }
+
+  function sendTokenDividends(
+    address refAddr,
+    address userAddr,
+    uint8 matrix,
+    uint8 level
+  ) private {
+    (address receiver, bool isExtraDividends) = findTokenReceiver(
+      refAddr,
+      userAddr,
+      level
+    );
+
+    updateG3X7Pool(receiver, level);
+    updateG3X7Club(receiver, level);
+    updateG3X7Academy(receiver, level);
+
+    TransferHelper.safeTransfer(
+      TOKEN,
+      receiver,
+      calPerc(LevelPrice[level], 50)
+
+      // update
+    );
+
+    if (isExtraDividends) {
+      emit SentExtraTokenDividends(userAddr, receiver, matrix, level);
+    }
+  }
+
+  function findTokenReceiver(
+    address refAddr,
+    address userAddr,
+    uint8 level
+  ) private returns (address _receiver, bool _isExtraDividends) {
+    address receiver = refAddr;
+    bool isExtraDividends;
+
+    while (true) {
+      if (Users[receiver].G3X7Matrix[level].Blocked) {
+        emit MissedTokenReceive(receiver, userAddr, 2, level);
+        isExtraDividends = true;
+        receiver = Users[receiver].G3X7Matrix[level].CurrentRef;
+      } else {
+        return (receiver, isExtraDividends);
+      }
+    }
+  }
+
+  function updateG3X7Pool(address userAddr, uint8 level) private {
+    uint256 commAmount = calPerc(LevelPrice[level], RanksComm);
+    TransferHelper.safeTransfer(TOKEN, PoolAddr, commAmount);
+    IPool(PoolAddr).DepositAmount(level, commAmount);
+    emit G3X7RankUpdated(userAddr, level, commAmount);
+  }
+
+  function updateG3X7Club(address userAddr, uint8 level) private {
+    uint256 commAmount = calPerc(LevelPrice[level], ClubComm);
+    TransferHelper.safeTransfer(TOKEN, ClubAddr, commAmount);
+    emit G3X7ClubUpdated(userAddr, level, commAmount);
+  }
+
+  function updateG3X7Academy(address userAddr, uint8 level) private {
+    uint256 commAmount = calPerc(LevelPrice[level], AcademyComm);
+    TransferHelper.safeTransfer(TOKEN, AcademyAddr, commAmount);
+    emit G3X7AcademyUpdated(userAddr, level, commAmount);
+  }
+
+  function activateAllG3X7Levels(address userAddr) public {
+    require(Id1 == msg.sender, "!Id1");
+
+    for (uint8 i = 1; i <= LAST_LEVEL; i++) {
+      Users[userAddr].ActiveG3X7Levels[i] = true;
+      Users[userAddr].G3X7Matrix[i].Blocked = false;
+    }
+  }
+
+  function withdraw() public {
+    require(isUserExists(msg.sender), "Users not exists");
+    require(Users[msg.sender].Amount > 0, "Users didn't have any amount");
+    TransferHelper.safeTransfer(TOKEN, msg.sender, Users[msg.sender].Amount);
+  }
+
+  function usersActiveG3X7Levels(
+    address userAddr,
+    uint8 level
+  ) public view returns (bool) {
+    return Users[userAddr].ActiveG3X7Levels[level];
+  }
+
+  function usersG3X7Matrix(
+    address userAddr,
+    uint8 level
+  ) public view returns (address, address[] memory, address[] memory, bool) {
+    return (
+      Users[userAddr].G3X7Matrix[level].CurrentRef,
+      Users[userAddr].G3X7Matrix[level].FirstLevelRefs,
+      Users[userAddr].G3X7Matrix[level].SecondLevelRefs,
+      Users[userAddr].G3X7Matrix[level].Blocked
+    );
+  }
+
+  function isUserExists(address user) public view returns (bool) {
+    return (Users[user].Id != 0);
+  }
+
+  function calPerc(uint256 tAmount, uint8 tPerc) public pure returns (uint256) {
+    uint256 perc = (tAmount * tPerc) / 100;
+    return perc;
+  }
+}

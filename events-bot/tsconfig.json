@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2021", // Target ECMAScript 2021 or an appropriate version
+    "module": "CommonJS", // Use CommonJS modules for Node.js
+    "outDir": "./dist", // Output directory for transpiled code
+    "rootDir": "./src", // Root directory for TypeScript source files
+    "strict": true, // Enable strict type-checking
+    "esModuleInterop": true, // Allow default imports from CommonJS modules
+    "skipLibCheck": true, // Skip type checking of declaration files
+    "forceConsistentCasingInFileNames": true // Ensure consistent file name casing
+    // Other options...
+  },
+  "include": ["src/**/*.ts"], // Specify the source files to include
+  "exclude": ["node_modules"] // Exclude node_modules from compilation
+}

@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.9.2",
+    "@truffle/hdwallet-provider": "^2.1.12",
+    "@uniswap/v3-periphery": "^1.4.3",
+    "hdkey": "^2.1.0",
+    "web3": "^4.0.2"
+  }
+}
