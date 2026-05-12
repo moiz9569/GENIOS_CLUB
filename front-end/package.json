@@ -11,6 +11,7 @@
   "dependencies": {
     "@headlessui/react": "^1.7.15",
     "@heroicons/react": "^2.0.18",
+    "@next/swc-win32-x64-msvc": "^16.2.6",
     "@thirdweb-dev/react": "^3.14.20",
     "@thirdweb-dev/sdk": "^3.10.40",
     "@thirdweb-dev/wallets": "^1.1.15",
